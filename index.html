@@ -780,7 +780,7 @@ document.addEventListener('keydown',e=>{
 // ============================================================
 // SCORING
 // ============================================================
-function calcMBTI(){
+function calcMBTI(bf){
   let E=0,I=0,S=0,N=0,T=0,F=0,J=0,P=0;
   mbtiQuestions.forEach((q,i)=>{
     const a=state.mbtiAnswers[i];
@@ -791,8 +791,23 @@ function calcMBTI(){
     else if(q.dim==='JP'){a===0?J++:P++;}
   });
   const safeDiv=(a,b)=>b===0?50:Math.round(a/b*100);
+  const tied=[];
+  // Break ties using correlated Big Five trait; mark tied dims
+  function decide(a,b,dimA,dimB,bfKey,bfHighMeansA){
+    if(a===b){
+      tied.push(dimA+'/'+dimB);
+      if(bf){return (bf[bfKey]>=50)===bfHighMeansA?dimA:dimB;}
+      return dimA; // last-resort default
+    }
+    return a>b?dimA:dimB;
+  }
+  const ei=decide(E,I,'E','I','E',true);
+  const sn=decide(S,N,'S','N','O',false); // high Openness → Intuitive
+  const tf=decide(T,F,'T','F','A',false); // high Agreeableness → Feeling
+  const jp=decide(J,P,'J','P','C',true);  // high Conscientiousness → Judging
   return {
-    type:(E>=I?'E':'I')+(S>=N?'S':'N')+(T>=F?'T':'F')+(J>=P?'J':'P'),
+    type:ei+sn+tf+jp,
+    tied,
     dims:{
       E:safeDiv(E,E+I),I:safeDiv(I,E+I),
       S:safeDiv(S,S+N),N:safeDiv(N,S+N),
@@ -827,7 +842,8 @@ function showLoading(){
   state.phase='loading';
   saveState();
   setTimeout(()=>{
-    state.results={mbti:calcMBTI(),bigFive:calcBigFive()};
+    const bigFive=calcBigFive();
+    state.results={mbti:calcMBTI(bigFive),bigFive};
     saveState();
     buildResults();
     showScreen('results-screen');
@@ -862,10 +878,10 @@ function buildResults(){
 
     <div class="glass dims-section reveal">
       <div class="sub-label">MBTI 四维度分布</div>
-      ${dimRowHTML('E','I',mbti.dims.E,mbti.dims.I,'ei')}
-      ${dimRowHTML('S','N',mbti.dims.S,mbti.dims.N,'sn')}
-      ${dimRowHTML('T','F',mbti.dims.T,mbti.dims.F,'tf')}
-      ${dimRowHTML('J','P',mbti.dims.J,mbti.dims.P,'jp')}
+      ${dimRowHTML('E','I',mbti.dims.E,mbti.dims.I,'ei',mbti.tied.includes('E/I'))}
+      ${dimRowHTML('S','N',mbti.dims.S,mbti.dims.N,'sn',mbti.tied.includes('S/N'))}
+      ${dimRowHTML('T','F',mbti.dims.T,mbti.dims.F,'tf',mbti.tied.includes('T/F'))}
+      ${dimRowHTML('J','P',mbti.dims.J,mbti.dims.P,'jp',mbti.tied.includes('J/P'))}
     </div>
 
     <div class="glass radar-section reveal">
@@ -934,13 +950,14 @@ function buildResults(){
   },400);
 }
 
-function dimRowHTML(l1,l2,p1,p2,cls){
+function dimRowHTML(l1,l2,p1,p2,cls,isTied){
   const dom=p1>=p2?l1:l2;
   const c1=dom===l1?'var(--purple)':'var(--text-muted)';
   const c2=dom===l2?'var(--purple)':'var(--text-muted)';
+  const tiedBadge=isTied?`<span style="font-size:11px;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);border-radius:6px;padding:2px 7px;margin-left:8px;vertical-align:middle">平衡型 · 参考大五推断</span>`:'';
   return `<div class="dim-row">
     <div class="dim-poles">
-      <span class="dim-letter" style="color:${c1}">${l1} <span style="font-weight:400;font-size:12px">${p1}%</span></span>
+      <span class="dim-letter" style="color:${c1}">${l1} <span style="font-weight:400;font-size:12px">${p1}%</span>${tiedBadge}</span>
       <span class="dim-letter" style="color:${c2}"><span style="font-weight:400;font-size:12px">${p2}%</span> ${l2}</span>
     </div>
     <div class="dim-track">
