@@ -239,6 +239,23 @@ body{
 }
 
 /* Notification */
+/* History */
+.history-wrap{max-width:680px;margin:0 auto;padding:60px 20px 80px;width:100%}
+.history-back-btn{background:none;border:none;color:var(--text-muted);font-size:14px;cursor:pointer;padding:0;margin-bottom:32px;display:flex;align-items:center;gap:6px;transition:color .2s}
+.history-back-btn:hover{color:var(--text)}
+.history-header{margin-bottom:32px}
+.history-card{padding:20px;margin-bottom:14px;cursor:pointer;transition:transform .2s,background .2s;border-radius:16px}
+.history-card:hover{transform:translateY(-2px);background:rgba(255,255,255,0.09)}
+.history-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
+.history-type{font-size:28px;font-weight:800;letter-spacing:-1px;background:linear-gradient(135deg,var(--purple),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.history-name{font-size:14px;color:var(--text-muted);margin-top:2px}
+.history-date{font-size:12px;color:var(--text-muted);margin-top:6px;opacity:.7}
+.history-arrow{font-size:24px;color:var(--text-muted);line-height:1}
+.history-bf-bars{display:flex;flex-direction:column;gap:6px}
+.history-empty{text-align:center;padding:60px 20px}
+.btn-ghost{background:rgba(255,255,255,0.06);border:1px solid var(--glass-border);color:var(--text);border-radius:980px;padding:12px 28px;font-size:15px;cursor:pointer;transition:all .2s;font-family:inherit}
+.btn-ghost:hover{background:rgba(255,255,255,0.1)}
+
 .toast{
   position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(100px);
   background:rgba(30,20,60,0.95);border:1px solid var(--glass-border);
@@ -302,7 +319,10 @@ body{
           <div class="feat-desc">自动保存进度<br>随时继续</div>
         </div>
       </div>
-      <button class="btn-primary" id="start-btn">开始探索 →</button>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+        <button class="btn-primary" id="start-btn">开始探索 →</button>
+        <button class="btn-ghost" onclick="showHistory()">📋 历史记录</button>
+      </div>
     </div>
   </div>
 </div>
@@ -363,6 +383,19 @@ body{
 <!-- ===== RESULTS ===== -->
 <div class="screen" id="results-screen">
   <div class="results-inner" id="results-inner"></div>
+</div>
+
+<!-- ===== HISTORY ===== -->
+<div class="screen" id="history-screen">
+  <div class="history-wrap">
+    <button class="history-back-btn" onclick="showScreen('hero')">← 返回首页</button>
+    <div class="history-header">
+      <div class="hero-badge" style="margin-bottom:12px">测试档案</div>
+      <h2 style="font-size:32px;font-weight:700;letter-spacing:-0.5px"><span class="grad">历史记录</span></h2>
+      <p style="color:var(--text-muted);font-size:14px;margin-top:8px">最多保存最近 10 次测试结果，点击可查看完整报告</p>
+    </div>
+    <div id="history-list"></div>
+  </div>
 </div>
 
 <script>
@@ -619,6 +652,68 @@ function loadSavedState(){
   return false;
 }
 
+// History: save / load / render
+function saveToHistory(mbti, bigFive){
+  try{
+    const key='ptest_history';
+    const list=JSON.parse(localStorage.getItem(key)||'[]');
+    list.unshift({date:Date.now(), mbtiType:mbti.type, tied:mbti.tied||[], dims:mbti.dims, bigFive});
+    if(list.length>10) list.length=10;
+    localStorage.setItem(key, JSON.stringify(list));
+  }catch(e){}
+}
+function loadHistory(){
+  try{return JSON.parse(localStorage.getItem('ptest_history')||'[]');}catch(e){return [];}
+}
+
+function showHistory(){
+  const list=loadHistory();
+  const container=document.getElementById('history-list');
+  if(!list.length){
+    container.innerHTML=`<div class="history-empty">
+      <div style="font-size:48px;margin-bottom:16px">📭</div>
+      <div style="color:var(--text-muted);font-size:16px">还没有测试记录</div>
+      <div style="color:var(--text-muted);font-size:13px;margin-top:8px">完成测试后结果会自动保存在这里</div>
+    </div>`;
+  } else {
+    container.innerHTML=list.map((r,i)=>{
+      const td=mbtiTypes[r.mbtiType]||{emoji:'🔮',name:'未知'};
+      const d=new Date(r.date);
+      const dateStr=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      const bfBars=r.bigFive?Object.entries({O:'开放',C:'尽责',E:'外向',A:'宜人',N:'神经质'}).map(([k,label])=>`
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+          <span style="color:var(--text-muted);width:28px">${label}</span>
+          <div style="flex:1;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden">
+            <div style="width:${r.bigFive[k]}%;height:100%;background:linear-gradient(90deg,var(--purple),var(--pink));border-radius:2px"></div>
+          </div>
+          <span style="color:var(--text-muted);width:30px;text-align:right">${r.bigFive[k]}%</span>
+        </div>`).join(''):'';
+      return `<div class="history-card glass" onclick="viewHistoryResult(${i})">
+        <div class="history-card-top">
+          <div>
+            <div class="history-type">${td.emoji} ${r.mbtiType}</div>
+            <div class="history-name">${td.name}</div>
+            <div class="history-date">${dateStr}</div>
+          </div>
+          <div class="history-arrow">›</div>
+        </div>
+        <div class="history-bf-bars">${bfBars}</div>
+      </div>`;
+    }).join('');
+  }
+  showScreen('history-screen');
+}
+
+function viewHistoryResult(index){
+  const list=loadHistory();
+  const r=list[index];
+  if(!r) return;
+  state.results={mbti:{type:r.mbtiType,tied:r.tied||[],dims:r.dims},bigFive:r.bigFive};
+  buildResults();
+  showScreen('results-screen');
+  setTimeout(initScrollReveal,200);
+}
+
 // ============================================================
 // SCREEN MANAGEMENT
 // ============================================================
@@ -843,7 +938,9 @@ function showLoading(){
   saveState();
   setTimeout(()=>{
     const bigFive=calcBigFive();
-    state.results={mbti:calcMBTI(bigFive),bigFive};
+    const mbti=calcMBTI(bigFive);
+    state.results={mbti,bigFive};
+    saveToHistory(mbti,bigFive);
     saveState();
     buildResults();
     showScreen('results-screen');
@@ -931,6 +1028,7 @@ function buildResults(){
     <div class="action-row reveal">
       <button class="btn-primary" onclick="retake()">重新测试</button>
       <button class="btn-secondary" onclick="shareResult()">复制结果 ↗</button>
+      <button class="btn-ghost" onclick="showHistory()">📋 历史记录</button>
     </div>
   `;
 
